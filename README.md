@@ -2,6 +2,9 @@
 
 GRAFT (Graph-Aware Fusion Transformer) is a deep learning framework for cancer driver gene prediction that integrates multi-omics data and multiple biological networks.
 
+[![DOI](https://img.shields.io/badge/DOI-10.1093%2Fbib%2Fbbaf706-blue)](https://doi.org/10.1093/bib/bbaf706)
+[![Paper](https://img.shields.io/badge/Journal-Briefings%20in%20Bioinformatics-orange)](https://academic.oup.com/bib/article/27/1/bbaf706/8419942)
+
 ### Key Features
 * **Multi-view Graph Encoding:** Learns network-specific embeddings from
     * Protein–Protein Interaction Network (PPI)
