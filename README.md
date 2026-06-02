@@ -1,6 +1,3 @@
-Dưới đây là tài liệu báo cáo khối lượng công việc được viết lại toàn vẹn theo chuẩn học thuật, bổ sung chi tiết phần giải nghĩa cho từng ký hiệu toán học trong các công thức.
-
----
 
 ### 1. Chuẩn bị và biểu diễn đồ thị sinh học kép (Dual-Graph Representation)
 
