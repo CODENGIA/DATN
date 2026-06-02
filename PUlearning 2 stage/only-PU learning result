@@ -1,0 +1,328 @@
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: BLCA
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 6500 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 274808.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 100
+[*] Đã khớp 80 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 56 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 24 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (56 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.008615
+    - Epoch 050/200 | nnPU Loss: 0.0394
+    - Epoch 100/200 | nnPU Loss: 0.0368
+    - Epoch 150/200 | nnPU Loss: 0.0361
+    - Epoch 200/200 | nnPU Loss: 0.0333
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.8834
+    - AUPRC (Đề xuất) : 0.2038 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.393555
+    - F1-Score (Test) : 0.1176
+    - Dự đoán Positive: 1 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: CESC
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 369324.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 21
+[*] Đã khớp 13 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 9 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 4 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh thưa thớt nhãn (9 gen Train). Khóa cứng GNN, chỉ huấn luyện Classifier.
+[*] Tham số Prior nnPU được thiết lập: 0.001000
+    - Epoch 050/200 | nnPU Loss: 0.0174
+    - Epoch 100/200 | nnPU Loss: 0.0150
+    - Epoch 150/200 | nnPU Loss: 0.0138
+    - Epoch 200/200 | nnPU Loss: 0.0114
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 1.0000
+    - AUPRC (Đề xuất) : 1.0000 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.113159
+    - F1-Score (Test) : 0.8000
+    - Dự đoán Positive: 3 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: COAD
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 362866.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 147
+[*] Đã khớp 112 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 78 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 34 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (78 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.008667
+    - Epoch 050/200 | nnPU Loss: 0.0480
+    - Epoch 100/200 | nnPU Loss: 0.0450
+    - Epoch 150/200 | nnPU Loss: 0.0436
+    - Epoch 200/200 | nnPU Loss: 0.0448
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.6776
+    - AUPRC (Đề xuất) : 0.0136 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.138184
+    - F1-Score (Test) : 0.0000
+    - Dự đoán Positive: 2 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: ESCA
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 349890.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 76
+[*] Đã khớp 56 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 39 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 17 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (39 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.004333
+    - Epoch 050/200 | nnPU Loss: 0.0292
+    - Epoch 100/200 | nnPU Loss: 0.0277
+    - Epoch 150/200 | nnPU Loss: 0.0261
+    - Epoch 200/200 | nnPU Loss: 0.0252
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.9460
+    - AUPRC (Đề xuất) : 0.1613 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.197876
+    - F1-Score (Test) : 0.1538
+    - Dự đoán Positive: 2 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: HNSC
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 361110.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 148
+[*] Đã khớp 115 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 80 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 35 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (80 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.008889
+    - Epoch 050/200 | nnPU Loss: 0.0474
+    - Epoch 100/200 | nnPU Loss: 0.0475
+    - Epoch 150/200 | nnPU Loss: 0.0464
+    - Epoch 200/200 | nnPU Loss: 0.0465
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.8670
+    - AUPRC (Đề xuất) : 0.2295 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.022537
+    - F1-Score (Test) : 0.0800
+    - Dự đoán Positive: 134 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: KIRC
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9500 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 373286.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 48
+[*] Đã khớp 33 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 23 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 10 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh thưa thớt nhãn (23 gen Train). Khóa cứng GNN, chỉ huấn luyện Classifier.
+[*] Tham số Prior nnPU được thiết lập: 0.002421
+    - Epoch 050/200 | nnPU Loss: 0.0245
+    - Epoch 100/200 | nnPU Loss: 0.0220
+    - Epoch 150/200 | nnPU Loss: 0.0202
+    - Epoch 200/200 | nnPU Loss: 0.0191
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.8249
+    - AUPRC (Đề xuất) : 0.2555 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.054291
+    - F1-Score (Test) : 0.0870
+    - Dự đoán Positive: 19 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: KIRP
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 359084.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 27
+[*] Đã khớp 22 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 15 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 7 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh thưa thớt nhãn (15 gen Train). Khóa cứng GNN, chỉ huấn luyện Classifier.
+[*] Tham số Prior nnPU được thiết lập: 0.001667
+    - Epoch 050/200 | nnPU Loss: 0.0198
+    - Epoch 100/200 | nnPU Loss: 0.0164
+    - Epoch 150/200 | nnPU Loss: 0.0141
+    - Epoch 200/200 | nnPU Loss: 0.0135
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.9950
+    - AUPRC (Đề xuất) : 0.1954 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.021088
+    - F1-Score (Test) : 0.0748
+    - Dự đoán Positive: 103 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: LIHC
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 347218.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 87
+[*] Đã khớp 58 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 40 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 18 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (40 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.004444
+    - Epoch 050/200 | nnPU Loss: 0.0316
+    - Epoch 100/200 | nnPU Loss: 0.0283
+    - Epoch 150/200 | nnPU Loss: 0.0276
+    - Epoch 200/200 | nnPU Loss: 0.0252
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.9495
+    - AUPRC (Đề xuất) : 0.3492 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.120972
+    - F1-Score (Test) : 0.3333
+    - Dự đoán Positive: 6 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: LUSC
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 344198.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 32
+[*] Đã khớp 20 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 14 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 6 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh thưa thớt nhãn (14 gen Train). Khóa cứng GNN, chỉ huấn luyện Classifier.
+[*] Tham số Prior nnPU được thiết lập: 0.001556
+    - Epoch 050/200 | nnPU Loss: 0.0223
+    - Epoch 100/200 | nnPU Loss: 0.0185
+    - Epoch 150/200 | nnPU Loss: 0.0161
+    - Epoch 200/200 | nnPU Loss: 0.0145
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.8869
+    - AUPRC (Đề xuất) : 0.5010 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.042480
+    - F1-Score (Test) : 0.1000
+    - Dự đoán Positive: 18 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: PRAD
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 360860.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 55
+[*] Đã khớp 42 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 29 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 13 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh thưa thớt nhãn (29 gen Train). Khóa cứng GNN, chỉ huấn luyện Classifier.
+[*] Tham số Prior nnPU được thiết lập: 0.003222
+    - Epoch 050/200 | nnPU Loss: 0.0216
+    - Epoch 100/200 | nnPU Loss: 0.0201
+    - Epoch 150/200 | nnPU Loss: 0.0184
+    - Epoch 200/200 | nnPU Loss: 0.0175
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.7962
+    - AUPRC (Đề xuất) : 0.3089 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.194580
+    - F1-Score (Test) : 0.3077
+    - Dự đoán Positive: 8 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: STAD
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 356480.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 78
+[*] Đã khớp 57 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 39 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 18 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (39 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.004333
+    - Epoch 050/200 | nnPU Loss: 0.0342
+    - Epoch 100/200 | nnPU Loss: 0.0307
+    - Epoch 150/200 | nnPU Loss: 0.0292
+    - Epoch 200/200 | nnPU Loss: 0.0259
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.7133
+    - AUPRC (Đề xuất) : 0.1065 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.060760
+    - F1-Score (Test) : 0.0690
+    - Dự đoán Positive: 19 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: THCA
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 368018.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 69
+[*] Đã khớp 53 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 37 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 16 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (37 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.004111
+    - Epoch 050/200 | nnPU Loss: 0.0306
+    - Epoch 100/200 | nnPU Loss: 0.0282
+    - Epoch 150/200 | nnPU Loss: 0.0272
+    - Epoch 200/200 | nnPU Loss: 0.0252
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.7037
+    - AUPRC (Đề xuất) : 0.0732 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.017578
+    - F1-Score (Test) : 0.0308
+    - Dự đoán Positive: 122 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: UCEC
+================================================================================
+--- Đang nạp và lọc dữ liệu đồ thị ---
+[*] Đã khớp được 9000 gen từ danh sách mục tiêu vào đồ thị gốc.
+[*] Số lượng cạnh (edges) giảm từ 421812 xuống 360250.
+--- Đang nạp và phân chia danh sách đáp án chuẩn (NCG & OncoKB) ---
+[*] Tổng số gen ung thư trong từ điển NCG và OncoKB: 73
+[*] Đã khớp 52 gen thủ phạm ung thư vào mạng lưới hiện tại.
+[*] Đã cấp: 36 gen Positive cho Train (mớm cho nnPU)
+[*] Đã giấu: 16 gen Positive cho Test (để chấm AUPRC khách quan)
+    [-->] ĐĂNG KÝ: Bệnh dồi dào nhãn (36 gen Train). Mở khóa lớp conv2 với lr=1e-5.
+[*] Tham số Prior nnPU được thiết lập: 0.004000
+    - Epoch 050/200 | nnPU Loss: 0.0296
+    - Epoch 100/200 | nnPU Loss: 0.0261
+    - Epoch 150/200 | nnPU Loss: 0.0244
+    - Epoch 200/200 | nnPU Loss: 0.0231
+
+📊 KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP ĐỘC LẬP (INDEPENDENT SET):
+    - ROC-AUC         : 0.9151
+    - AUPRC (Đề xuất) : 0.4005 <-- Chỉ số đối chiếu chính
+    - Ngưỡng từ Val   : 0.117188
+    - F1-Score (Test) : 0.4000
+    - Dự đoán Positive: 6 gen
+
+================================================================================
+🚀 BẮT ĐẦU FINE-TUNE & CHẤM ĐIỂM CHUẨN KHOA HỌC: msigdb
+================================================================================
+-

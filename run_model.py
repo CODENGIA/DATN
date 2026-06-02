@@ -1,233 +1,530 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-from sklearn.metrics import roc_auc_score, average_precision_score, f1_score
-import scipy.sparse as sp
-import networkx as nx
-import numpy as np
-import pandas as pd
-import argparse
-from model import GRAFT
-from utils import preprocessing_incidence_matrix, extract_edge_data_with_score, load_kfold_data, load_label_single, stratified_kfold_split
-import random
+"""
+run_model.py  —  Training & Evaluation Pipeline cho SiamesePUGNN v2
+=====================================================================
+Nâng cấp so với phiên bản trước:
+  [R1] Multi-run (5 seeds): In Mean ± Std cho ROC-AUC và AUPRC
+  [R2] Inductive placeholder: train_cancer_A → test_cancer_B
+  [R3] AlphaMax prior: gọi estimate_prior_alphamax() sau khi load data
+  [R4] Truyền edge_weight vào model.forward()
+  [R5] Early Stopping theo Val AUPRC + ReduceLROnPlateau
+"""
+
+import os
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+
 import gc
+import warnings
+import argparse
+import random
+
+import numpy as np
+import torch
+from sklearn.metrics import roc_auc_score, average_precision_score
+
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-# Hyperparameter and setting
-parser = argparse.ArgumentParser()
-parser.add_argument('dataset', type=str, help='dataset (CPDB, STRING)')
-parser.add_argument('cancerType', type=str, help='Types of cancer (pan-cancer, kirc)')
-parser.add_argument('--embed_dim', type=int, default=128, help='embedding dimension')
-parser.add_argument('--seed', type=int, default=1234, help='random seed')
-parser.add_argument('--device', type=int, default=0, help='GPU device ID (if available)')
-args = parser.parse_args()
-
-device = torch.device(f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu')
-seed = args.seed
-random.seed(seed)
-np.random.seed(seed)
-torch.manual_seed(seed)
-torch.cuda.manual_seed(seed)
+# ==============================================================================
+# SEED
+# ==============================================================================
+def seed_everything(seed: int = 42):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark     = False
 
 
-# Loss Function
-class FocalLoss(nn.Module):
-    def __init__(self, alpha=1, gamma=2):
-        super(FocalLoss, self).__init__()
-        self.alpha = alpha
-        self.gamma = gamma
+# ==============================================================================
+# EARLY STOPPING (theo Val AUPRC — cao hơn = tốt hơn)
+# ==============================================================================
+class EarlyStopping:
+    def __init__(self, patience: int = 50, min_delta: float = 1e-5):
+        self.patience     = patience
+        self.min_delta    = min_delta
+        self.counter      = 0
+        self.best_score   = -float('inf')
+        self.early_stop   = False
+        self.best_weights = None
 
-    def forward(self, inputs, targets):
-        BCE = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        pt = torch.exp(-BCE)
-        loss = self.alpha * ((1 - pt) ** self.gamma) * BCE
-        return loss.mean()
-
-
-# Data input
-dataPath = f"./Data/{args.dataset}"
-# load new multi-omics feature 
-data_x_df = pd.read_csv(dataPath + f'/multiomics_features_{args.dataset}.tsv', sep='\t', index_col=0)
-data_x_df = data_x_df.dropna()
-scaler = StandardScaler()
-features_scaled = scaler.fit_transform(data_x_df.values)
-data_x = torch.tensor(features_scaled, dtype=torch.float32, device=device)
-data_x = data_x[:,:48]
-
-cancerType = args.cancerType.lower()
-
-if cancerType=='pan-cancer':
-    data_x = data_x[:,:48]
-    print("--- [INFO] Loading hyperparameters for Pan-Cancer ---")
-    learning_rate = 0.001
-    epochs = 30
-    num_heads = 4
-    num_layers = 3
-    dropout = 0.1
-    
-else:
-    cancerType_dict = {
-                        'kirc':[0,16,32],
-                        'brca':[1,17,33],
-                        'prad':[3,19,35],
-                        'stad':[4,20,36],
-                        'hnsc':[5,21,37],
-                        'luad':[6,22,38],
-                        'thca':[7,23,39],
-                        'blca':[8,24,40],
-                        'esca':[9,25,41],
-                        'lihc':[10,26,42],
-                        'ucec':[11,27,43],
-                        'coad':[12,28,44],
-                        'lusc':[13,29,45],
-                        'cesc':[14,30,46],
-                        'kirp':[15,31,47]
-                                }
-    data_x = data_x[:, cancerType_dict[cancerType]]
-    print(f"===== [INFO] Loading hyperparameters for Specific Cancer: {cancerType.upper()} =====")
-    learning_rate = 1e-4
-    epochs = 50
-    num_heads = 2
-    num_layers = 2
-    dropout = 0.2
-
-print(f"Applied Hyperparameters: Learning Rate={learning_rate}, Epochs={epochs}, Heads={num_heads}, Layers={num_layers}, Dropout={dropout}")
-
-node_features = data_x  # torch.Tensor, [N, 48]
-ppiAdj = torch.load(dataPath+f'/{args.dataset}_ppi.pkl')
-pathAdj = torch.load(dataPath+'/pathway_SimMatrix_filtered.pkl')
-goAdj = torch.load(dataPath+'/GO_SimMatrix_filtered.pkl')
-
-# Extract edge indices (row, col) and corresponding edge scores from adjacency matrices
-ppi_row, ppi_col, ppi_score = extract_edge_data_with_score(ppiAdj)
-path_row, path_col, path_score = extract_edge_data_with_score(pathAdj)
-go_row, go_col, go_score = extract_edge_data_with_score(goAdj)
-
-# Dictionary storing edge index and score tuples for each biological network type
-# Used later by EdgeImportanceEncoder to incorporate edge confidence into attention bias
-edge_indices_with_score = {
-    "ppi": (ppi_row, ppi_col, ppi_score),     # PPI with confidence
-    "path": (path_row, path_col, path_score),  # Pathway co-occurrence
-    "go": (go_row, go_col, go_score)         # gene semantic similarity
-}
-
-# Dictionary storing only edge indices [2, num_edges] for each network type
-# Used by TripleGNNFeatureExtractor to perform GCN message passing per network
-edge_index_dict = {
-    'ppi': torch.stack([ppi_row, ppi_col], dim=0).to(device),     # [2, num_edges]
-    'path': torch.stack([path_row, path_col], dim=0).to(device),
-    'go': torch.stack([go_row, go_col], dim=0).to(device),
-}
+    def __call__(self, val_auprc: float, model: torch.nn.Module) -> bool:
+        """
+        Returns True nếu là điểm tốt nhất và đã lưu weights.
+        """
+        if val_auprc > self.best_score + self.min_delta:
+            self.best_score   = val_auprc
+            self.counter      = 0
+            self.best_weights = {
+                k: v.cpu().clone() for k, v in model.state_dict().items()
+            }
+            return True
+        self.counter += 1
+        if self.counter >= self.patience:
+            self.early_stop = True
+        return False
 
 
-# Gene set matrix
-msigdb_genelist = pd.read_csv('./Data/msigdb/geneList.csv', header=None)
-msigdb_genelist = list(msigdb_genelist[0].values)
-incidence_matrix = preprocessing_incidence_matrix(msigdb_genelist, dataPath)
-gene_set_matrix = torch.tensor(incidence_matrix.values, dtype=torch.float32, device=device)
+# ==============================================================================
+# EVALUATE
+# ==============================================================================
+@torch.no_grad()
+def evaluate(model, x_n, x_t, e_n, ew_n, e_t, ew_t,
+             Y_full, mask, device, use_amp: bool = True):
+    """
+    Tính ROC-AUC và AUPRC trên tập được chỉ định bởi mask.
+
+    Returns: (roc_auc: float, auprc: float)
+    """
+    model.eval()
+    with torch.amp.autocast('cuda', enabled=use_amp):
+        logits = model(x_n, x_t, e_n, ew_n, e_t, ew_t)
+        probs  = torch.sigmoid(logits).cpu().numpy()
+
+    mask_np = mask.cpu().numpy()
+    y_true  = Y_full.cpu().numpy()[mask_np]
+    y_prob  = probs[mask_np]
+
+    if len(np.unique(y_true)) < 2:
+        return 0.0, 0.0
+
+    return (
+        float(roc_auc_score(y_true, y_prob)),
+        float(average_precision_score(y_true, y_prob)),
+    )
 
 
-# Random Walk Positional Encoding & PageRank Centrality
-torch_ppi_dense = ppiAdj.to_dense().cpu().numpy()
-ppi_sp = sp.csr_matrix(torch_ppi_dense)
+# ==============================================================================
+# MỘT LẦN CHẠY (1 seed)
+# ==============================================================================
+def run_one_seed(seed: int,
+                 cancer_type: str,
+                 target_num_genes: int,
+                 args,
+                 device: torch.device,
+                 save_dir: str) -> dict:
+    """
+    Thực hiện toàn bộ pipeline train + eval cho 1 seed.
 
-# PageRank Centrality
-G = nx.from_scipy_sparse_matrix(ppi_sp)
-pagerank_dict = nx.pagerank(G, alpha=0.85)
-pagerank_vec = torch.tensor([pagerank_dict[i] for i in range(len(pagerank_dict))], dtype=torch.float32, device=device).unsqueeze(1)  # [N, 1]
+    Returns:
+        dict với các key: val_roc, val_auprc, test_roc, test_auprc
+    """
+    from utils import (prepare_dual_graph_data,
+                       load_and_split_ground_truth,
+                       estimate_prior_alphamax)
+    from model import SiamesePUGNN, robust_nnpu_loss
 
-# Random Walk Positional Encoding
-deg_row = ppi_sp.sum(axis=1).A1
-deg_row[deg_row == 0] = 1.0
-rw_mat = ppi_sp.multiply(1.0 / deg_row[:, None])
-pca = PCA(n_components=args.embed_dim)  # Converting to dimensionalized tensors via PCA
-rw_pe_pca = pca.fit_transform(rw_mat.toarray()) # [N, N] -> [N, embed_dim]
-rw_pe = torch.tensor(rw_pe_pca, dtype=torch.float32, device=device)
+    seed_everything(seed)
+    print(f"\n{'='*60}")
+    print(f"  SEED {seed}  |  {cancer_type}  |  {device}")
+    print(f"{'='*60}")
 
+    # ── Đường dẫn ──────────────────────────────────────────────────────────
+    cancer_dir      = os.path.join(args.base_data_dir, cancer_type)
+    pkl_path        = os.path.join(cancer_dir, f'{cancer_type}_input_data_humannet.pkl')
+    orig_tsv_path   = os.path.join(cancer_dir, f'{cancer_type}_gene_index_humannet.tsv')
+    target_tsv_path = os.path.join(cancer_dir,
+                                   f'{cancer_type}_training_genes_{target_num_genes}.tsv')
+    ncg_path        = os.path.join(cancer_dir, f'{cancer_type}_pos.tsv')
+    oncokb_path     = os.path.join(cancer_dir,
+                                   f'{cancer_type}_oncokb_biomarker_drug_associations.tsv')
 
-# Model Train & Test
-cross_val=10    # 10 fold
-AUC = np.zeros(shape=(cross_val))
-AUPR = np.zeros(shape=(cross_val))
-F1_SCORES = np.zeros(cross_val)
+    # ── Load đồ thị ─────────────────────────────────────────────────────────
+    x_n, e_n, ew_n, x_t, e_t, ew_t, gene_list = prepare_dual_graph_data(
+        pkl_path, orig_tsv_path, target_tsv_path, device
+    )
 
-if cancerType != 'pan-cancer':
-    num_folds = cross_val
-    path = f"{dataPath}/dataset/specific-cancer/"
-    label_new, label_pos, label_neg = load_label_single(path, cancerType, device)
-    random.shuffle(label_pos)
-    random.shuffle(label_neg)
-    l = len(label_new)
-    l1 = int(len(label_pos)/num_folds)
-    l2 = int(len(label_neg)/num_folds)
-    folds = stratified_kfold_split(label_pos, label_neg, l, l1, l2)
-    Y = label_new
+    # ── Load nhãn ───────────────────────────────────────────────────────────
+    Y_train, _, _, Y_full, val_mask, test_mask = load_and_split_ground_truth(
+        ncg_path, oncokb_path, gene_list,
+        train_ratio=0.70, val_ratio=0.15,
+        seed=seed, device=device,
+    )
 
-print(f"----- {cancerType.upper()} 10-fold validation ------")
-for i in range(cross_val):
-    print(f'--------- Fold {i+1} Begin ---------')
-    
-    if cancerType == 'pan-cancer':
-        fold_path = f"{dataPath}/10fold/fold_{i+1}"
-        train_idx, valid_idx, test_idx, train_mask, valid_mask, test_mask, Y = load_kfold_data(fold_path, device)
-    else:
-        train_idx, valid_idx, test_idx, train_mask, val_mask, test_mask = folds[i]
-    
-    model = GRAFT(
-        input_dim=node_features.shape[1],
-        gene_set_dim=gene_set_matrix.shape[1],
-        embed_dim=args.embed_dim,
-        num_heads=num_heads,
-        num_layers=num_layers,
-        dropout=dropout
+    # ── [R3] AlphaMax prior ─────────────────────────────────────────────────
+    prior = estimate_prior_alphamax(x_n, x_t, Y_train,
+                                    clip_low=0.01, clip_high=0.15)
+    print(f"[*] Prior (AlphaMax, seed={seed}): {prior:.4f}")
+
+    # ── Khởi tạo model ──────────────────────────────────────────────────────
+    use_amp = (device.type == 'cuda')
+    model   = SiamesePUGNN(
+        in_dim=14, hidden_dim=64, heads=4,
+        num_gat_layers=3, dropout=0.3, drop_edge_p=0.2,
     ).to(device)
-    
-    optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    loss_fn = FocalLoss(alpha=1.0, gamma=1.5)
-    
-    for epoch in range(epochs):
+
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=args.lr, weight_decay=1e-4
+    )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='max', factor=0.5, patience=20,
+        min_lr=1e-6,
+    )
+    scaler        = torch.amp.GradScaler('cuda', enabled=use_amp)
+    early_stopper = EarlyStopping(patience=50, min_delta=1e-5)
+
+    # ── Vòng lặp huấn luyện ──────────────────────────────────────────────────
+    print(f"\n--- Bắt đầu huấn luyện (max {args.epochs} epochs) ---")
+    for epoch in range(args.epochs):
         model.train()
         optimizer.zero_grad()
-        logits = model(node_features, gene_set_matrix, edge_indices_with_score, edge_index_dict, rw_pe, pagerank_vec)  # shape: [N]
-        loss = loss_fn(logits[train_idx], Y[train_idx])
-        loss.backward()
-        optimizer.step()
-        
-        model.eval()
-        with torch.no_grad():
-            pred_logits = model(node_features, gene_set_matrix, edge_indices_with_score, edge_index_dict, rw_pe, pagerank_vec)
-            pred_probs = torch.sigmoid(pred_logits)
 
-            val_auc = roc_auc_score(Y[valid_idx].cpu(), pred_probs[valid_idx].cpu())
-            val_aupr = average_precision_score(Y[valid_idx].cpu(), pred_probs[valid_idx].cpu())
-            print(f"[Fold {i+1}] Epoch {epoch+1} | Val AUC: {val_auc:.4f}, AUPR: {val_aupr:.4f}")
+        with torch.amp.autocast('cuda', enabled=use_amp):
+            logits = model(x_n, x_t, e_n, ew_n, e_t, ew_t)
+            loss   = robust_nnpu_loss(logits, Y_train, prior=prior)
 
-    model.eval()
-    with torch.no_grad():
-        final_logits = model(node_features, gene_set_matrix, edge_indices_with_score, edge_index_dict, rw_pe, pagerank_vec)
-        final_probs = torch.sigmoid(final_logits)
-        pred_labels = (final_probs > 0.5).float()
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        scaler.step(optimizer)
+        scaler.update()
 
-        AUC[i] = roc_auc_score(Y[test_idx].cpu(), final_probs[test_idx].cpu())
-        AUPR[i] = average_precision_score(Y[test_idx].cpu(), final_probs[test_idx].cpu())
-        F1_SCORES[i] = f1_score(Y[test_idx].cpu(), pred_labels[test_idx].cpu())
-    
-    print(f"Fold {i+1} Results — AUC: {AUC[i]:.3f}, AUPR: {AUPR[i]:.3f}, F1: {F1_SCORES[i]:.3f}")
+        # Validate mỗi 5 epoch
+        if (epoch + 1) % 5 == 0 or epoch == 0:
+            val_roc, val_auprc = evaluate(
+                model, x_n, x_t, e_n, ew_n, e_t, ew_t,
+                Y_full, val_mask, device, use_amp,
+            )
+            scheduler.step(val_auprc)
+            improved = early_stopper(val_auprc, model)
+            mark = " ★ BEST" if improved else ""
+            print(
+                f"  Epoch {epoch+1:04d}/{args.epochs} | "
+                f"Loss={loss.item():.4f} | "
+                f"Val AUC={val_roc:.4f} | Val AUPRC={val_auprc:.4f}{mark}"
+            )
 
-    with open(f"./final_results_{args.dataset}_{cancerType.upper()}.txt", "a") as result_file:
-        result_file.write(f"Fold {i+1}: AUC={AUC[i]:.3f}, AUPR={AUPR[i]:.3f}, F1-score={F1_SCORES[i]:.3f}\n")
-    
-    del model
+            if early_stopper.early_stop:
+                print(f"  → Early Stop @ epoch {epoch+1} | "
+                      f"Best Val AUPRC={early_stopper.best_score:.4f}")
+                break
+
+    # ── Khôi phục best weights ──────────────────────────────────────────────
+    if early_stopper.best_weights:
+        model.load_state_dict(
+            {k: v.to(device) for k, v in early_stopper.best_weights.items()}
+        )
+
+    # ── Lưu checkpoint ──────────────────────────────────────────────────────
+    ckpt_path = os.path.join(save_dir,
+                             f'siamese_pugnn_{cancer_type}_seed{seed}.pth')
+    torch.save(model.state_dict(), ckpt_path)
+    print(f"  [+] Đã lưu checkpoint: {ckpt_path}")
+
+    # ── Đánh giá cuối ───────────────────────────────────────────────────────
+    val_roc_f,  val_auprc_f  = evaluate(
+        model, x_n, x_t, e_n, ew_n, e_t, ew_t,
+        Y_full, val_mask, device, use_amp,
+    )
+    test_roc_f, test_auprc_f = evaluate(
+        model, x_n, x_t, e_n, ew_n, e_t, ew_t,
+        Y_full, test_mask, device, use_amp,
+    )
+    print(f"\n  [Seed {seed}] Val  | AUC={val_roc_f:.4f}  AUPRC={val_auprc_f:.4f}")
+    print(f"  [Seed {seed}] Test | AUC={test_roc_f:.4f}  AUPRC={test_auprc_f:.4f}")
+
     torch.cuda.empty_cache()
     gc.collect()
-    
-print("========== Final 10-Fold Results ==========")
-print(f"Mean AUC: {AUC.mean():.3f} ± {AUC.std():.3f}")
-print(f"Mean AUPR: {AUPR.mean():.3f} ± {AUPR.std():.3f}")
-print(f"Mean F1: {F1_SCORES.mean():.3f} ± {F1_SCORES.std():.3f}")
 
-with open(f"./final_results_{args.dataset}_{cancerType.upper()}.txt", "a") as result_file:
-    result_file.write(f"\nFinal Results:\nMean AUC: {AUC.mean():.3f} ± {AUC.std():.3f}\nMean AUPR: {AUPR.mean():.3f} ± {AUPR.std():.3f}\nMean F1-score: {F1_SCORES.mean():.3f} ± {F1_SCORES.std():.3f}\n\n")
+    return {
+        'val_roc':    val_roc_f,
+        'val_auprc':  val_auprc_f,
+        'test_roc':   test_roc_f,
+        'test_auprc': test_auprc_f,
+    }
 
+
+# ==============================================================================
+# [R1]  MULTI-RUN: 5 SEEDS
+# ==============================================================================
+def run_multirun(cancer_type: str,
+                 target_num_genes: int,
+                 args,
+                 seeds: list = None):
+    """
+    Chạy pipeline 5 lần với 5 seeds khác nhau, in Mean ± Std cuối cùng.
+    """
+    if seeds is None:
+        seeds = [42, 69, 123, 456, 999]
+
+    save_dir = args.save_dir
+    os.makedirs(save_dir, exist_ok=True)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    all_results = []
+    for seed in seeds:
+        result = run_one_seed(
+            seed=seed,
+            cancer_type=cancer_type,
+            target_num_genes=target_num_genes,
+            args=args,
+            device=device,
+            save_dir=save_dir,
+        )
+        all_results.append(result)
+
+    # ── Tổng hợp thống kê ────────────────────────────────────────────────────
+    print(f"\n{'='*60}")
+    print(f"  TỔNG KẾT MULTI-RUN  |  {cancer_type}  |  {len(seeds)} seeds")
+    print(f"{'='*60}")
+
+    for metric in ['val_roc', 'val_auprc', 'test_roc', 'test_auprc']:
+        vals = np.array([r[metric] for r in all_results])
+        print(f"  {metric:15s}: {vals.mean():.4f} ± {vals.std():.4f}  "
+              f"(seeds={seeds})")
+
+    # Trả về dict để dùng ngoài nếu cần
+    return all_results
+
+
+# ==============================================================================
+# [R2]  INDUCTIVE PLACEHOLDER: Train trên bệnh A → Test trên bệnh B
+# ==============================================================================
+def run_inductive(train_cancer:      str,
+                  test_cancer:       str,
+                  target_num_genes:  int,
+                  args,
+                  seed: int = 42):
+    """
+    Inductive Setup:
+        1. Train đầy đủ trên đồ thị của train_cancer.
+        2. Load trọng số đã lưu.
+        3. Chạy inference (không finetune) trên đồ thị của test_cancer.
+
+    Điều kiện để hoạt động:
+        • Cả 2 bệnh phải có cùng in_dim (14) — đã thỏa mãn.
+        • Số lượng gen (N) có thể KHÁC nhau vì model không có
+          weight cố định theo N (chỉ GAT + Linear).
+
+    Args:
+        train_cancer     : Ví dụ 'BLCA'
+        test_cancer      : Ví dụ 'LUAD'
+        target_num_genes : Số gen lọc (dùng chung cho 2 bệnh)
+        args             : argparse Namespace
+        seed             : seed cho data split
+    """
+    from utils import (prepare_dual_graph_data,
+                       load_and_split_ground_truth,
+                       estimate_prior_alphamax)
+    from model import SiamesePUGNN, robust_nnpu_loss
+
+    seed_everything(seed)
+    save_dir = args.save_dir
+    os.makedirs(save_dir, exist_ok=True)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # ── BƯỚC 1: Huấn luyện trên bệnh A ──────────────────────────────────────
+    print(f"\n[Inductive] === Huấn luyện trên {train_cancer} ===")
+    train_dir       = os.path.join(args.base_data_dir, train_cancer)
+    pkl_A           = os.path.join(train_dir, f'{train_cancer}_input_data_humannet.pkl')
+    orig_tsv_A      = os.path.join(train_dir, f'{train_cancer}_gene_index_humannet.tsv')
+    target_tsv_A    = os.path.join(train_dir,
+                                   f'{train_cancer}_training_genes_{target_num_genes}.tsv')
+    ncg_A           = os.path.join(train_dir, f'{train_cancer}_pos.tsv')
+    oncokb_A        = os.path.join(train_dir,
+                                   f'{train_cancer}_oncokb_biomarker_drug_associations.tsv')
+
+    x_n_A, e_n_A, ew_n_A, x_t_A, e_t_A, ew_t_A, genes_A = prepare_dual_graph_data(
+        pkl_A, orig_tsv_A, target_tsv_A, device
+    )
+    Y_train_A, _, _, Y_full_A, val_mask_A, test_mask_A = load_and_split_ground_truth(
+        ncg_A, oncokb_A, genes_A,
+        train_ratio=0.70, val_ratio=0.15, seed=seed, device=device,
+    )
+    prior_A = estimate_prior_alphamax(x_n_A, x_t_A, Y_train_A)
+    print(f"[Inductive] Prior {train_cancer} (AlphaMax): {prior_A:.4f}")
+
+    use_amp = (device.type == 'cuda')
+    model   = SiamesePUGNN(in_dim=14, hidden_dim=64, heads=4,
+                           num_gat_layers=3, dropout=0.3).to(device)
+    optimizer     = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    scaler        = torch.amp.GradScaler('cuda', enabled=use_amp)
+    early_stopper = EarlyStopping(patience=50)
+    scheduler     = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='max', factor=0.5, patience=20, min_lr=1e-6, verbose=False
+    )
+
+    for epoch in range(args.epochs):
+        model.train()
+        optimizer.zero_grad()
+        with torch.amp.autocast('cuda', enabled=use_amp):
+            logits = model(x_n_A, x_t_A, e_n_A, ew_n_A, e_t_A, ew_t_A)
+            loss   = robust_nnpu_loss(logits, Y_train_A, prior=prior_A)
+        scaler.scale(loss).backward()
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        scaler.step(optimizer)
+        scaler.update()
+
+        if (epoch + 1) % 5 == 0 or epoch == 0:
+            val_roc, val_auprc = evaluate(
+                model, x_n_A, x_t_A, e_n_A, ew_n_A, e_t_A, ew_t_A,
+                Y_full_A, val_mask_A, device, use_amp,
+            )
+            scheduler.step(val_auprc)
+            if early_stopper(val_auprc, model):
+                print(f"  Epoch {epoch+1:04d} | Loss={loss.item():.4f} | "
+                      f"Val AUPRC={val_auprc:.4f} ★")
+            if early_stopper.early_stop:
+                print(f"  → Early Stop @ epoch {epoch+1}")
+                break
+
+    if early_stopper.best_weights:
+        model.load_state_dict(
+            {k: v.to(device) for k, v in early_stopper.best_weights.items()}
+        )
+
+    ckpt_path = os.path.join(save_dir, f'inductive_{train_cancer}_seed{seed}.pth')
+    torch.save(model.state_dict(), ckpt_path)
+    print(f"[Inductive] Đã lưu model {train_cancer}: {ckpt_path}")
+
+    # ── BƯỚC 2: Inference trên bệnh B (KHÔNG finetune) ───────────────────────
+    print(f"\n[Inductive] === Inference trên {test_cancer} (zero-shot) ===")
+    test_dir     = os.path.join(args.base_data_dir, test_cancer)
+    pkl_B        = os.path.join(test_dir, f'{test_cancer}_input_data_humannet.pkl')
+    orig_tsv_B   = os.path.join(test_dir, f'{test_cancer}_gene_index_humannet.tsv')
+    target_tsv_B = os.path.join(test_dir,
+                                f'{test_cancer}_training_genes_{target_num_genes}.tsv')
+    ncg_B        = os.path.join(test_dir, f'{test_cancer}_pos.tsv')
+    oncokb_B     = os.path.join(test_dir,
+                                f'{test_cancer}_oncokb_biomarker_drug_associations.tsv')
+
+    x_n_B, e_n_B, ew_n_B, x_t_B, e_t_B, ew_t_B, genes_B = prepare_dual_graph_data(
+        pkl_B, orig_tsv_B, target_tsv_B, device
+    )
+    _, _, _, Y_full_B, _, test_mask_B = load_and_split_ground_truth(
+        ncg_B, oncokb_B, genes_B,
+        train_ratio=0.70, val_ratio=0.15, seed=seed, device=device,
+    )
+
+    # Load lại checkpoint bệnh A vào model mới (đề phòng N khác nhau → GAT vẫn OK)
+    model_B = SiamesePUGNN(in_dim=14, hidden_dim=64, heads=4,
+                            num_gat_layers=3, dropout=0.3).to(device)
+    model_B.load_state_dict(torch.load(ckpt_path, map_location=device))
+
+    test_roc, test_auprc = evaluate(
+        model_B, x_n_B, x_t_B, e_n_B, ew_n_B, e_t_B, ew_t_B,
+        Y_full_B, test_mask_B, device, use_amp,
+    )
+    print(f"\n[Inductive] Train={train_cancer} → Test={test_cancer}")
+    print(f"  ROC-AUC : {test_roc:.4f}")
+    print(f"  AUPRC   : {test_auprc:.4f}  ← Quan trọng nhất")
+
+    torch.cuda.empty_cache()
+    gc.collect()
+    return {'test_roc': test_roc, 'test_auprc': test_auprc}
+
+
+# ==============================================================================
+# ENTRY POINT
+# ==============================================================================
+def get_args():
+    parser = argparse.ArgumentParser(description='SiamesePUGNN v2 — run_model.py')
+    parser.add_argument('--base_data_dir', type=str,
+                        default='/content/drive/MyDrive/DATN/Data')
+    parser.add_argument('--save_dir',      type=str,
+                        default='/content/drive/MyDrive/DATN/Checkpoints')
+    parser.add_argument('--epochs',        type=int,   default=500)
+    parser.add_argument('--lr',            type=float, default=1e-3)
+    parser.add_argument('--mode',          type=str,
+                        choices=['multirun', 'inductive', 'single'],
+                        default='multirun',
+                        help='multirun=5 seeds | inductive=A→B | single=1 seed')
+    parser.add_argument('--seed',          type=int,   default=42,
+                        help='Seed dùng cho mode=single hoặc mode=inductive')
+    parser.add_argument('--train_cancer',  type=str,   default='BLCA',
+                        help='Bệnh huấn luyện (dùng cho mode=inductive)')
+    parser.add_argument('--test_cancer',   type=str,   default='LUAD',
+                        help='Bệnh kiểm tra  (dùng cho mode=inductive)')
+    args, _ = parser.parse_known_args()
+    return args
+
+
+if __name__ == '__main__':
+    # ── CẤU HÌNH BATCH TRAINING (CHẠY NHIỀU BỆNH) ───────────────────────────
+    CANCER_TYPES = ['BLCA', 'LUAD', 'BRCA', 'THCA', 'KIRC']
+    NUM_GENES    = 9000
+    # ─────────────────────────────────────────────────────────────────────────
+
+    args          = get_args()
+    summary_table = []
+
+    print("=" * 70)
+    print(f"[*] BẮT ĐẦU CHẠY HÀNG LOẠT {len(CANCER_TYPES)} BỆNH:")
+    print(f"    {CANCER_TYPES}")
+    print(f"[*] CHẾ ĐỘ: {args.mode.upper()}")
+    print("=" * 70)
+
+    for CANCER_TYPE in CANCER_TYPES:
+        print("\n" + "★" * 70)
+        print(f"  ĐANG XỬ LÝ BỆNH: {CANCER_TYPE}")
+        print("★" * 70)
+
+        try:
+            if args.mode == 'multirun':
+                seeds_list = [42, 69, 123, 456, 999]
+                results = run_multirun(
+                    cancer_type      = CANCER_TYPE,
+                    target_num_genes = NUM_GENES,
+                    args             = args,
+                    seeds            = seeds_list,
+                )
+                avg_roc   = float(np.mean([r['test_roc']   for r in results]))
+                avg_auprc = float(np.mean([r['test_auprc'] for r in results]))
+                summary_table.append({
+                    'cancer': CANCER_TYPE,
+                    'roc':    avg_roc,
+                    'auprc':  avg_auprc,
+                    'note':   f"Mean ({len(seeds_list)} seeds)",
+                })
+
+            elif args.mode == 'inductive':
+                result = run_inductive(
+                    train_cancer     = CANCER_TYPE,
+                    test_cancer      = args.test_cancer,
+                    target_num_genes = NUM_GENES,
+                    args             = args,
+                    seed             = args.seed,
+                )
+                summary_table.append({
+                    'cancer': f"{CANCER_TYPE} -> {args.test_cancer}",
+                    'roc':    result['test_roc'],
+                    'auprc':  result['test_auprc'],
+                    'note':   "Inductive",
+                })
+
+            elif args.mode == 'single':
+                device   = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+                os.makedirs(args.save_dir, exist_ok=True)
+                result = run_one_seed(
+                    seed             = args.seed,
+                    cancer_type      = CANCER_TYPE,
+                    target_num_genes = NUM_GENES,
+                    args             = args,
+                    device           = device,
+                    save_dir         = args.save_dir,
+                )
+                summary_table.append({
+                    'cancer': CANCER_TYPE,
+                    'roc':    result['test_roc'],
+                    'auprc':  result['test_auprc'],
+                    'note':   f"Seed {args.seed}",
+                })
+
+        except Exception as e:
+            print(f"\n[!] LỖI khi chạy {CANCER_TYPE}: {e}")
+            print(f"    -> Bỏ qua, tiếp tục bệnh tiếp theo.\n")
+            continue
+
+    # ── BẢNG TỔNG KẾT ────────────────────────────────────────────────────────
+    print("\n" + "=" * 70)
+    print("  BANG TONG KET KET QUA HUAN LUYEN (TEST SET)")
+    print("=" * 70)
+    print(f"{'BENH':<20} | {'ROC-AUC':<12} | {'AUPRC':<12} | {'GHI CHU':<20}")
+    print("-" * 70)
+    for row in summary_table:
+        print(f"{row['cancer']:<20} | {row['roc']:<12.4f} | {row['auprc']:<12.4f} | {row['note']:<20}")
+    print("=" * 70)
+    print("  DA HOAN TAT TOAN BO DANH SACH!")

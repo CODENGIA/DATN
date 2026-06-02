@@ -1,0 +1,18 @@
+======================================================================
+BỆNH            | ROC-AUC      | AUPRC        | GHI CHÚ             
+----------------------------------------------------------------------
+BLCA            | 0.8854       | 0.2442       | Mean (5 seeds)      
+LUAD            | 0.7892       | 0.1120       | Mean (5 seeds)      
+BRCA            | 0.7611       | 0.1029       | Mean (5 seeds)      
+THCA            | 0.6672       | 0.0099       | Mean (5 seeds)      
+KIRC            | 0.7941       | 0.1417       | Mean (5 seeds)      
+ESCA            | 0.7738       | 0.1205       | Mean (5 seeds)      
+CESC            | 0.8582       | 0.4703       | Mean (5 seeds)      
+COAD            | 0.6943       | 0.1252       | Mean (5 seeds)      
+HNSC            | 0.7349       | 0.0699       | Mean (5 seeds)      
+KIRP            | 0.9108       | 0.1948       | Mean (5 seeds)      
+LIHC            | 0.8455       | 0.0971       | Mean (5 seeds)      
+LUSC            | 0.8553       | 0.1099       | Mean (5 seeds)      
+PRAD            | 0.8601       | 0.1839       | Mean (5 seeds)      
+STAD            | 0.7008       | 0.0878       | Mean (5 seeds)      
+UCEC            | 0.8661       | 0.0825       | Mean (5 seeds)      
